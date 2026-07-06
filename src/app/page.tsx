@@ -1,4 +1,8 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Sparkles,
   Wand2,
@@ -7,8 +11,9 @@ import {
   Globe,
   Users,
   Mail,
-  ArrowRight,
   Check,
+  Lock,
+  X,
 } from "lucide-react";
 import { formatCurrencyAUD } from "@/lib/utils";
 
@@ -28,8 +33,50 @@ const PLANS = [
 ];
 
 export default function Home() {
+  const router = useRouter();
+  const [prompt, setPrompt] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [guestCampaign, setGuestCampaign] = useState<Record<string, unknown> | null>(null);
+  const [showPaywall, setShowPaywall] = useState(false);
+
+  const handleGuestGenerate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!prompt.trim()) return;
+
+    setLoading(true);
+    try {
+      const res = await fetch("/api/generate-campaign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, isGuest: true }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setGuestCampaign(data);
+        setShowPaywall(true);
+      } else {
+        alert("Generation failed. Please try again.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error generating campaign.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignUp = () => {
+    // Store the guest campaign in sessionStorage for claiming after signup
+    if (guestCampaign) {
+      sessionStorage.setItem("guestCampaign", JSON.stringify(guestCampaign));
+    }
+    router.push("/login?mode=signup");
+  };
+
   return (
     <div className="min-h-screen bg-bg text-text">
+      {/* Header */}
       <header className="sticky top-0 z-30 glass">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
           <div className="flex items-center gap-2 text-lg font-bold">
@@ -38,13 +85,14 @@ export default function Home() {
           </div>
           <nav className="flex items-center gap-3">
             <Link href="/login" className="text-sm text-muted hover:text-text">Log in</Link>
-            <Link href="/login" className="rounded-xl bg-[linear-gradient(90deg,var(--brand),var(--brand-2))] px-4 py-2 text-sm font-semibold text-white">
-              Start free
-            </Link>
+            <button onClick={() => router.push("/login?mode=signup")} className="rounded-xl bg-[linear-gradient(90deg,var(--brand),var(--brand-2))] px-4 py-2 text-sm font-semibold text-white">
+              Sign up free
+            </button>
           </nav>
         </div>
       </header>
 
+      {/* Hero Section with Hook */}
       <section className="relative overflow-hidden">
         <div className="pointer-events-none absolute -top-32 left-1/2 h-96 w-[42rem] -translate-x-1/2 rounded-full bg-brand/30 blur-[140px]" />
         <div className="mx-auto max-w-4xl px-5 pt-24 pb-16 text-center">
@@ -52,23 +100,40 @@ export default function Home() {
             <Sparkles className="h-3.5 w-3.5 text-accent" /> Your entire marketing team, in one prompt
           </div>
           <h1 className="text-balance text-5xl font-extrabold leading-tight sm:text-6xl">
-            Describe your business.{" "}
-            <span className="gradient-text">Get a full campaign</span> in minutes.
+            What are you{" "}
+            <span className="gradient-text">promoting today?</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg text-muted">
             OmniCampaign turns a single sentence into ad copy, a scroll-stopping
             image, a voiced vertical video, and a live landing page — then
             captures every lead into your CRM and inbox.
           </p>
-          <div className="mt-9 flex items-center justify-center gap-3">
-            <Link href="/login" className="inline-flex items-center gap-2 rounded-xl bg-[linear-gradient(90deg,var(--brand),var(--brand-2))] px-6 py-3.5 font-semibold text-white">
-              Generate your first campaign <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-          <p className="mt-3 text-xs text-muted">2 free campaigns · No credit card required</p>
+
+          {/* Hook Input */}
+          <form onSubmit={handleGuestGenerate} className="mx-auto mt-9 max-w-2xl">
+            <div className="flex gap-3">
+              <input
+                type="text"
+                placeholder="e.g., 'Sustainable yoga mats for eco-conscious fitness enthusiasts'"
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                disabled={loading}
+                className="flex-1 rounded-xl border border-borderc bg-white/5 px-5 py-3.5 text-sm text-text placeholder-muted focus:border-brand focus:outline-none disabled:opacity-50"
+              />
+              <button
+                type="submit"
+                disabled={loading || !prompt.trim()}
+                className="rounded-xl bg-[linear-gradient(90deg,var(--brand),var(--brand-2))] px-6 py-3.5 font-semibold text-white disabled:opacity-50"
+              >
+                {loading ? "Generating..." : "Generate"}
+              </button>
+            </div>
+            <p className="mt-3 text-xs text-muted">Free preview · No account needed</p>
+          </form>
         </div>
       </section>
 
+      {/* Features Section */}
       <section className="mx-auto max-w-6xl px-5 py-16">
         <h2 className="text-center text-3xl font-bold">One prompt. Everything you need to launch.</h2>
         <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -84,6 +149,7 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Pricing Section */}
       <section className="mx-auto max-w-6xl px-5 py-16">
         <h2 className="text-center text-3xl font-bold">Simple, credit-based pricing</h2>
         <p className="mt-3 text-center text-muted">One credit = one full multi-asset campaign. Prices in AUD.</p>
@@ -108,14 +174,15 @@ export default function Home() {
                   </li>
                 ))}
               </ul>
-              <Link href="/login" className="mt-6 block rounded-xl bg-[linear-gradient(90deg,var(--brand),var(--brand-2))] py-3 text-center text-sm font-semibold text-white">
+              <button onClick={() => router.push("/login?mode=signup")} className="mt-6 block w-full rounded-xl bg-[linear-gradient(90deg,var(--brand),var(--brand-2))] py-3 text-center text-sm font-semibold text-white">
                 Get {p.name}
-              </Link>
+              </button>
             </div>
           ))}
         </div>
       </section>
 
+      {/* Footer */}
       <footer className="border-t border-borderc py-10 text-center text-sm text-muted">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-2 px-5">
           <div className="flex items-center gap-2 font-semibold text-text">
@@ -124,6 +191,51 @@ export default function Home() {
           <p>© {new Date().getFullYear()} OmniCampaign. All rights reserved.</p>
         </div>
       </footer>
+
+      {/* Paywall Modal */}
+      {showPaywall && guestCampaign && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur">
+          <div className="relative w-full max-w-2xl rounded-2xl border border-borderc bg-card p-8">
+            <button
+              onClick={() => setShowPaywall(false)}
+              className="absolute top-4 right-4 text-muted hover:text-text"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="mb-6 flex items-center gap-3">
+              <Lock className="h-6 w-6 text-accent" />
+              <h2 className="text-2xl font-bold">Unlock your full campaign</h2>
+            </div>
+
+            <p className="mb-6 text-muted">
+              Create a free account to download your TikTok video, landing page, and all campaign assets.
+            </p>
+
+            {/* Preview (Blurred) */}
+            <div className="mb-6 space-y-4">
+              <div className="relative h-64 overflow-hidden rounded-xl border border-borderc bg-black/50 blur-sm">
+                <div className="flex items-center justify-center h-full">
+                  <Lock className="h-12 w-12 text-muted" />
+                </div>
+              </div>
+              <p className="text-center text-sm text-muted">Your campaign preview (sign up to view)</p>
+            </div>
+
+            {/* CTA */}
+            <button
+              onClick={handleSignUp}
+              className="w-full rounded-xl bg-[linear-gradient(90deg,var(--brand),var(--brand-2))] py-3.5 text-center font-semibold text-white"
+            >
+              Create free account
+            </button>
+
+            <p className="mt-3 text-center text-xs text-muted">
+              Already have an account? <Link href="/login" className="text-accent hover:underline">Log in</Link>
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

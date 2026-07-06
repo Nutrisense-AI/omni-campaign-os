@@ -1,12 +1,13 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui";
 import { Sparkles } from "lucide-react";
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createSupabaseBrowserClient();
   const [mode, setMode] = useState<"signin" | "signup">("signup");
   const [email, setEmail] = useState("");
@@ -14,6 +15,13 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    const urlMode = searchParams.get("mode");
+    if (urlMode === "signin" || urlMode === "signup") {
+      setMode(urlMode);
+    }
+  }, [searchParams]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -30,10 +38,28 @@ export default function LoginPage() {
           },
         });
         if (error) throw error;
-        // If email confirmation is disabled, session is active immediately.
-        const { data } = await supabase.auth.getSession();
-        const { session } = data as { session: unknown };
+
+        // Get the session
+        const { data: sessionData } = await supabase.auth.getSession();
+        const session = sessionData?.session;
+
         if (session) {
+          // Claim guest campaign if it exists
+          const guestCampaignStr = sessionStorage.getItem("guestCampaign");
+          if (guestCampaignStr) {
+            try {
+              const guestCampaign = JSON.parse(guestCampaignStr);
+              // Update the campaign to attach to this user
+              await fetch("/api/claim-guest-campaign", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ campaignId: guestCampaign.id }),
+              });
+              sessionStorage.removeItem("guestCampaign");
+            } catch (e) {
+              console.error("Failed to claim guest campaign:", e);
+            }
+          }
           router.push("/dashboard");
           router.refresh();
         } else {
@@ -50,8 +76,8 @@ export default function LoginPage() {
         router.refresh();
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Something went wrong";
-      setErr(msg);
+      const errMsg = e instanceof Error ? e.message : "Something went wrong";
+      setErr(errMsg);
     } finally {
       setLoading(false);
     }
@@ -120,5 +146,13 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Loading...</div>}>
+      <LoginContent />
+    </Suspense>
   );
 }
