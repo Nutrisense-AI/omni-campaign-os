@@ -11,13 +11,20 @@ export async function generateImage(
   prompt: string,
   size: "1024x1024" | "1024x1536" | "1536x1024" = "1024x1024"
 ): Promise<Buffer> {
-  const res = await openai.images.generate({
-    model: IMAGE_MODEL,
-    prompt,
-    n: 1,
-    size,
-  });
-  const b64 = res.data?.[0]?.b64_json;
-  if (!b64) throw new Error("gpt-image-1 returned no image data");
-  return Buffer.from(b64, "base64");
+  try {
+    const res = await openai.images.generate({
+      model: IMAGE_MODEL,
+      prompt,
+      n: 1,
+      size,
+      response_format: "b64_json",
+    });
+    
+    const b64 = res.data?.[0]?.b64_json;
+    if (!b64) throw new Error("Image generation returned no image data");
+    return Buffer.from(b64, "base64");
+  } catch (error) {
+    console.error("Image generation error:", error);
+    throw error;
+  }
 }
